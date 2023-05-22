@@ -11,6 +11,7 @@ from langchain.prompts.chat import (
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
 )
+from streamlit_chat import message
 import streamlit as st
 import coloredlogs, logging
 from tqdm import tqdm
@@ -32,6 +33,7 @@ st.title("Game of Thrones Chat ⚔️")
 #     type='password'
 # )
 # os.environ["OPENAI_API_KEY"] = open_api_key
+# st.session_state['open_api_key'] = open_api_key
 
 @st.cache_data
 def create_db_from_txt_files(folder_path):
@@ -96,12 +98,25 @@ def get_response_from_question(_db, question, k=10):
     response = chain.run(question=question, docs=docs_page_content)
     return response, docs
 
+if 'questions' not in st.session_state:
+    st.session_state['questions'] = []
+if 'responses' not in st.session_state:
+    st.session_state['responses'] = []
+
 question = st.text_input(
     label="Ask Tyrion a question",
     value="Write a battle plan on the best way to attack King's Landing."
 )
- 
+
 db = create_db_from_txt_files('./data/got-books')
 response, docs = get_response_from_question(db, question=question)
-st.markdown(response)
+
+st.session_state['questions'].append(question)
+st.session_state['responses'].append(response)
+
+for i in range(len(st.session_state['questions'])):
+    question = st.session_state['questions'][i]
+    response = st.session_state['responses'][i]
+    message(question, is_user=True)  # align's the message to the left
+    message(response, is_user=False)  # align's the message to the right
 
