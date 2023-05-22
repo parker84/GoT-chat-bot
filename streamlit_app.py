@@ -21,7 +21,7 @@ import os
 load_dotenv(find_dotenv())
 embeddings = OpenAIEmbeddings()
 logger = logging.getLogger(__name__)
-coloredlogs.install(level=config('LOG_LEVEL'))
+coloredlogs.install(level=config('LOG_LEVEL', default='INFO'))
 st.set_page_config(page_title='GoT Chat', page_icon='⚔️', initial_sidebar_state="auto", menu_items=None)
 st.title("Game of Thrones Chat ⚔️")
 
@@ -55,7 +55,7 @@ def create_db_from_txt_files(folder_path):
     return db
 
 @st.cache_data
-def get_response_from_question(_db, question, k=10):
+def get_response_from_question(_db, question, memory, k=10):
     """
     gpt-3.5-turbo can handle up to 4097 tokens. Setting the chunksize to 1000 and k to 4 maximizes
     the number of tokens to analyze.
@@ -74,6 +74,8 @@ def get_response_from_question(_db, question, k=10):
         
         Here is relevant information on the history of Westeros to 
         help you answer the following questions: {docs}
+
+        Here is relevant information from the current conversation to help you answer the following question: {memory}
         
         Only use the factual information from these books to answer the question.
         
@@ -92,10 +94,9 @@ def get_response_from_question(_db, question, k=10):
     chat_prompt = ChatPromptTemplate.from_messages(
         [system_message_prompt, human_message_prompt]
     )
-
     chain = LLMChain(llm=chat, prompt=chat_prompt)
 
-    response = chain.run(question=question, docs=docs_page_content)
+    response = chain.run(question=question, docs=docs_page_content, memory=memory)
     return response, docs
 
 if 'questions' not in st.session_state:
@@ -109,7 +110,16 @@ question = st.text_input(
 )
 
 db = create_db_from_txt_files('./data/got-books')
-response, docs = get_response_from_question(db, question=question)
+if len(st.session_state['questions']) > 0:
+    memory = '\n\n'.join(
+        [
+            f'Question: {q}\nAnswer: {a}'
+            for q, a in zip(st.session_state['questions'], st.session_state['responses'])
+        ]
+    )
+else:
+    memory = None
+response, docs = get_response_from_question(db, question=question, memory=memory, k=10)
 
 st.session_state['questions'].append(question)
 st.session_state['responses'].append(response)
