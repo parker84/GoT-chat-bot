@@ -18,22 +18,21 @@ from tqdm import tqdm
 import os
 
 # --------------setup
-load_dotenv(find_dotenv())
-embeddings = OpenAIEmbeddings()
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=config('LOG_LEVEL', default='INFO'))
 st.set_page_config(page_title='GoT Chat', page_icon='⚔️', initial_sidebar_state="auto", menu_items=None)
 st.title("Game of Thrones Chat ⚔️")
 
-# st.sidebar.title("Enter Your API Keys 🗝️")
-# open_api_key = st.sidebar.text_input(
-#     "Open API Key", 
-#     value=st.session_state.get('open_api_key', ''),
-#     help="Get your API key from https://openai.com/",
-#     type='password'
-# )
-# os.environ["OPENAI_API_KEY"] = open_api_key
-# st.session_state['open_api_key'] = open_api_key
+st.sidebar.subheader("Enter Your API Key 🗝️")
+open_api_key = st.sidebar.text_input(
+    "Open API Key", 
+    value=st.session_state.get('open_api_key', ''),
+    help="Get your API key from https://openai.com/",
+    type='password'
+)
+os.environ["OPENAI_API_KEY"] = open_api_key
+st.session_state['open_api_key'] = open_api_key
+load_dotenv(find_dotenv())
 
 @st.cache_data
 def create_db_from_txt_files(folder_path):
@@ -109,24 +108,28 @@ question = st.text_input(
     value="Write a battle plan on the best way to attack King's Landing."
 )
 
-db = create_db_from_txt_files('./data/got-books')
-if len(st.session_state['questions']) > 0:
-    memory = '\n\n'.join(
-        [
-            f'Question: {q}\nAnswer: {a}'
-            for q, a in zip(st.session_state['questions'], st.session_state['responses'])
-        ]
-    )
+if question != "" and (open_api_key == '' or open_api_key is None):
+    st.error("⚠️ Please enter your API keys in the sidebar")
 else:
-    memory = None
-response, docs = get_response_from_question(db, question=question, memory=memory, k=10)
+    embeddings = OpenAIEmbeddings()
+    db = create_db_from_txt_files('./data/got-books')
+    if len(st.session_state['questions']) > 0:
+        memory = '\n\n'.join(
+            [
+                f'Question: {q}\nAnswer: {a}'
+                for q, a in zip(st.session_state['questions'], st.session_state['responses'])
+            ]
+        )
+    else:
+        memory = None
+    response, docs = get_response_from_question(db, question=question, memory=memory, k=10)
 
-st.session_state['questions'].append(question)
-st.session_state['responses'].append(response)
+    st.session_state['questions'].append(question)
+    st.session_state['responses'].append(response)
 
-for i in range(len(st.session_state['questions'])):
-    question = st.session_state['questions'][i]
-    response = st.session_state['responses'][i]
-    message(question, is_user=True)  # align's the message to the left
-    message(response, is_user=False)  # align's the message to the right
+    for i in range(len(st.session_state['questions'])):
+        question = st.session_state['questions'][i]
+        response = st.session_state['responses'][i]
+        message(question, is_user=True)  # align's the message to the left
+        message(response, is_user=False)  # align's the message to the right
 
