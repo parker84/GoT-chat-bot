@@ -17,11 +17,15 @@ import coloredlogs, logging
 from tqdm import tqdm
 import os
 
+# -------------constants
+DEFAULT_EMBEDDING_MODEL = "text-embedding-ada-002"
+DEFAULT_CHAT_MODEL = "gpt-3.5-turbo"
+
 # --------------setup
 logger = logging.getLogger(__name__)
 coloredlogs.install(level=config('LOG_LEVEL', default='INFO'))
 st.set_page_config(page_title='GoT Chat', page_icon='⚔️', initial_sidebar_state="auto", menu_items=None)
-st.title("Game of Thrones Chat ⚔️")
+st.title("Game of Thrones Chatbot ⚔️")
 
 st.sidebar.subheader("Enter Your API Key 🗝️")
 open_api_key = st.sidebar.text_input(
@@ -33,6 +37,10 @@ open_api_key = st.sidebar.text_input(
 os.environ["OPENAI_API_KEY"] = open_api_key
 st.session_state['open_api_key'] = open_api_key
 load_dotenv(find_dotenv())
+
+with st.sidebar.expander('Advanced Settings ⚙️', expanded=False):
+    open_ai_model = st.text_input('OpenAI Chat Model', DEFAULT_CHAT_MODEL, help='See model options here: https://platform.openai.com/docs/models/overview')   
+    embedding_model = st.text_input('OpenAI Embedding Model', DEFAULT_EMBEDDING_MODEL, help='See embedding model options here: https://platform.openai.com/docs/guides/embeddings/what-are-embeddings')
 
 @st.cache_data
 def create_db_from_txt_files(folder_path):
@@ -63,7 +71,7 @@ def get_response_from_question(_db, question, memory, k=10):
     docs = _db.similarity_search(question, k=k)
     docs_page_content = " ".join([d.page_content for d in docs])
 
-    chat = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+    chat = ChatOpenAI(model_name=open_ai_model, temperature=0)
 
     # Template to use for the system message prompt
     template = """
@@ -109,9 +117,9 @@ question = st.text_input(
 )
 
 if question != "" and (open_api_key == '' or open_api_key is None):
-    st.error("⚠️ Please enter your API keys in the sidebar")
+    st.error("⚠️ Please enter your API key in the sidebar")
 else:
-    embeddings = OpenAIEmbeddings()
+    embeddings = OpenAIEmbeddings(model=embedding_model)
     db = create_db_from_txt_files('./data/got-books')
     if len(st.session_state['questions']) > 0:
         memory = '\n\n'.join(
