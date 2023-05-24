@@ -85,7 +85,7 @@ def get_response_from_question(_db, question, memory, k=10):
 
     # Human question prompt
     human_template = """
-        Someone is coming to you for your expert advice, they are in need of your help.
+        Someone is coming to you (Tyrion Lannister) for your expert advice, they are in need of your help.
         Here is there question: {question}
     """
     human_message_prompt = HumanMessagePromptTemplate.from_template(human_template)
@@ -105,7 +105,7 @@ if 'responses' not in st.session_state:
 
 question = st.text_input(
     label="Ask Tyrion a question",
-    value="Write a battle plan on the best way to attack King's Landing."
+    value="What role did you play in the battle of the blackwater?"
 )
 
 if question != "" and (open_api_key == '' or open_api_key is None):
