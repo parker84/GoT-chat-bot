@@ -53,7 +53,7 @@ def create_db_from_txt_files(folder_path):
         loader = TextLoader(file_path=file_path, autodetect_encoding=True)
         book = loader.load()
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         docs = text_splitter.split_documents(book)
         all_docs.extend(docs)
 
