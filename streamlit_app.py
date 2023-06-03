@@ -1,9 +1,6 @@
-from langchain.document_loaders import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
 from langchain.chat_models import ChatOpenAI
 from langchain.chains import LLMChain
+import pinecone
 from dotenv import find_dotenv, load_dotenv
 from decouple import config
 from langchain.prompts.chat import (
@@ -12,14 +9,16 @@ from langchain.prompts.chat import (
     HumanMessagePromptTemplate,
 )
 from streamlit_chat import message
+from langchain.vectorstores import Pinecone
+from langchain.embeddings.openai import OpenAIEmbeddings
 import streamlit as st
 import coloredlogs, logging
-from tqdm import tqdm
 import os
+from constants import (
+    DEFAULT_CHAT_MODEL,
+    EMBEDDING_MODEL
+)
 
-# -------------constants
-DEFAULT_EMBEDDING_MODEL = "text-embedding-ada-002"
-DEFAULT_CHAT_MODEL = "gpt-3.5-turbo"
 
 # --------------setup
 logger = logging.getLogger(__name__)
@@ -40,42 +39,38 @@ load_dotenv(find_dotenv())
 
 with st.sidebar.expander('Advanced Settings ⚙️', expanded=False):
     open_ai_model = st.text_input('OpenAI Chat Model', DEFAULT_CHAT_MODEL, help='See model options here: https://platform.openai.com/docs/models/overview')   
-    embedding_model = st.text_input('OpenAI Embedding Model', DEFAULT_EMBEDDING_MODEL, help='See embedding model options here: https://platform.openai.com/docs/guides/embeddings/what-are-embeddings')
+
+def get_vectorstore():
+    text_field = "text"
+    embed = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+
+    pinecone.init(
+        api_key=config('PINECONE_API_KEY'),  # find api key in console at app.pinecone.io
+        environment=config('PINECONE_ENV')  # find next to api key in console
+    )
+    index = pinecone.Index(config('PINECONE_INDEX_NAME'))
+
+    vectorstore = Pinecone(
+        index, embed.embed_query, text_field
+    )
+
+    return vectorstore
 
 @st.cache_data
-def create_db_from_txt_files(folder_path):
-
-    all_docs = []
-    txt_files = [file for file in os.listdir(folder_path) if file.endswith(".txt")]
-    logger.info("Splitting text files into chunks...")
-    for filename in tqdm(txt_files):
-        file_path = os.path.join(folder_path, filename)
-        loader = TextLoader(file_path=file_path, autodetect_encoding=True)
-        book = loader.load()
-
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-        docs = text_splitter.split_documents(book)
-        all_docs.extend(docs)
-
-    logger.info("Creating database...")
-    db = FAISS.from_documents(all_docs, embeddings)
-    return db
-
-@st.cache_data
-def get_response_from_question(_db, question, memory, k=10):
+def get_response_from_question(_vectorstore, question, memory, k=10):
     """
     gpt-3.5-turbo can handle up to 4097 tokens. Setting the chunksize to 1000 and k to 4 maximizes
     the number of tokens to analyze.
     """
 
-    docs = _db.similarity_search(question, k=k)
+    docs = _vectorstore.similarity_search(question, k=k)
     docs_page_content = " ".join([d.page_content for d in docs])
 
     chat = ChatOpenAI(model_name=open_ai_model, temperature=0)
 
     # Template to use for the system message prompt
     template = """
-        Your name is Tyrion Lannister, son of Tywin Lannister, and you are a dwarf.
+        Your name is Tyrion Lannister, son of Tywin Lannister.
 
         You are an expert on the history of Westeros, and seasoned in the art of war and politics.
         
@@ -119,8 +114,7 @@ question = st.text_input(
 if question != "" and (open_api_key == '' or open_api_key is None):
     st.error("⚠️ Please enter your API key in the sidebar")
 else:
-    embeddings = OpenAIEmbeddings(model=embedding_model)
-    db = create_db_from_txt_files('./data/got-books')
+    vectorstore = get_vectorstore()
     if len(st.session_state['questions']) > 0:
         memory = '\n\n'.join(
             [
@@ -130,7 +124,7 @@ else:
         )
     else:
         memory = None
-    response, docs = get_response_from_question(db, question=question, memory=memory, k=10)
+    response, docs = get_response_from_question(vectorstore, question=question, memory=memory, k=10)
 
     st.session_state['questions'].append(question)
     st.session_state['responses'].append(response)
